@@ -108,6 +108,23 @@ var SeekerOfTheWay = &Card{
 	Toughness:    2,
 }
 
+var MarduHordechief = &Card{
+	Type:         Creature,
+	Name:         "Mardu Hordechief",
+	Cost:         []Mana{Any, Any, White},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    3,
+}
+
+var WorrierToken = &Card{
+	Type:         Creature,
+	Name:         "Worrier Token",
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        1,
+	Toughness:    1,
+}
+
 var Swamp = &Card{
 	Type:    Land,
 	Name:    "Swamp",
@@ -152,12 +169,16 @@ var MarduWorrier = &Deck{
 			Amount: 4,
 		},
 		{
+			Card:   MarduHordechief,
+			Amount: 4,
+		},
+		{
 			Card:   Swamp,
-			Amount: 20,
+			Amount: 18,
 		},
 		{
 			Card:   Plains,
-			Amount: 20,
+			Amount: 18,
 		},
 	},
 }
@@ -210,6 +231,7 @@ func (c *CardInPlay) Toughness() int {
 
 type Game struct {
 	Turn         int
+	Attacked     bool
 	Life         int
 	OpponentLife int
 	First        bool
@@ -220,6 +242,7 @@ type Game struct {
 
 func (g *Game) Print() {
 	fmt.Printf("Turn: %d\n", g.Turn)
+	fmt.Printf("Attacked: %t\n", g.Attacked)
 	fmt.Printf("Life: %d\n", g.Life)
 	fmt.Printf("OpponentLife: %d\n", g.OpponentLife)
 	fmt.Printf("First: %t\n", g.First)
@@ -258,6 +281,7 @@ const (
 
 func (g *Game) PlayOneTurn() Status {
 	g.Turn++
+	g.Attacked = false
 	g.Untap()
 	if s := g.Draw(); s != Playing {
 		return s
@@ -331,6 +355,14 @@ func (g *Game) PutCreature() bool {
 				Game:              g,
 			})
 			g.Hand = Take(g.Hand, i)
+			if g.Attacked && c == MarduHordechief {
+				g.BattleField = append(g.BattleField, &CardInPlay{
+					Tapped:            false,
+					SummoningSickness: true,
+					Card:              WorrierToken,
+					Game:              g,
+				})
+			}
 			return true
 		}
 	}
@@ -338,6 +370,28 @@ func (g *Game) PutCreature() bool {
 }
 
 func (g *Game) FirstMain() Status {
+	return Playing
+}
+
+func (g *Game) Combat() Status {
+	for _, c := range g.BattleField {
+		if c.Card.Type != Creature {
+			continue
+		}
+		if c.Tapped || c.SummoningSickness {
+			continue
+		}
+		c.Tapped = true
+		g.OpponentLife -= c.Power()
+		g.Attacked = true
+	}
+	if g.OpponentLife <= 0 {
+		return Win
+	}
+	return Playing
+}
+
+func (g *Game) SecondMain() Status {
 	// Put a land.
 	for i, c := range g.Hand {
 		if c.Type == Land {
@@ -355,27 +409,6 @@ func (g *Game) FirstMain() Status {
 	// Put creatures.
 	for g.PutCreature() {
 	}
-	return Playing
-}
-
-func (g *Game) Combat() Status {
-	for _, c := range g.BattleField {
-		if c.Card.Type != Creature {
-			continue
-		}
-		if c.Tapped || c.SummoningSickness {
-			continue
-		}
-		c.Tapped = true
-		g.OpponentLife -= c.Power()
-	}
-	if g.OpponentLife <= 0 {
-		return Win
-	}
-	return Playing
-}
-
-func (g *Game) SecondMain() Status {
 	return Playing
 }
 
