@@ -291,6 +291,8 @@ func NewGame(deck *Deck) *Game {
 func Stats(trial int) {
 	num := make(map[Status]int)
 	turns := make(map[Status]int)
+	winMax := 0
+	winMin := 1000
 	for i := 0; i < trial; i++ {
 		g := NewGame(MarduWorrier)
 		for {
@@ -298,12 +300,20 @@ func Stats(trial int) {
 			if s != Playing {
 				num[s]++
 				turns[s] += g.Turn
+				if s == Win {
+					if winMax < g.Turn {
+						winMax = g.Turn
+					}
+					if winMin > g.Turn {
+						winMin = g.Turn
+					}
+				}
 				break
 			}
 		}
 	}
 	fmt.Printf("Win: %d, Lose: %d, Draw: %d\n", num[Win], num[Lose], num[Draw])
-	fmt.Printf("%f\n", float64(turns[Win])/float64(num[Win]))
+	fmt.Printf("Avg: %f, Min: %d, Max: %d\n", float64(turns[Win])/float64(num[Win]), winMin, winMax)
 }
 
 func main() {
