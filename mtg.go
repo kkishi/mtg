@@ -325,36 +325,128 @@ func Take(c []*Card, i int) []*Card {
 	return append(c[0:i], c[i+1:]...)
 }
 
-func (g *Game) PutCreature() bool {
-	for i, c := range g.Hand {
-		if c.Type == Creature {
-			lands := make(map[*CardInPlay]bool)
-			for _, m := range c.Cost {
-				var ok bool
-				for _, cip := range g.BattleField {
-					if !cip.Tapped && !lands[cip] && cip.Card.CanProduce(m) {
-						lands[cip] = true
-						ok = true
-						break
-					}
-				}
-				if !ok {
-					break
-				}
+type Key struct {
+	Any   int
+	White int
+	Blue  int
+	Black int
+	Red   int
+	Green int
+}
+
+func (k *Key) Add(m Mana) {
+	switch m {
+	case Any:
+		k.Any++
+	case White:
+		k.White++
+	case Blue:
+		k.Blue++
+	case Black:
+		k.Black++
+	case Red:
+		k.Red++
+	case Green:
+		k.Green++
+	}
+}
+
+func Check(avail, cost int, any *int) bool {
+	if avail < cost {
+		return false
+	}
+	*any += avail - cost
+	return true
+}
+
+func (k *Key) Payable(c *Key) bool {
+	var any int
+	if !Check(k.White, c.White, &any) {
+		return false
+	}
+	if !Check(k.Blue, c.Blue, &any) {
+		return false
+	}
+	if !Check(k.Black, c.Black, &any) {
+		return false
+	}
+	if !Check(k.Red, c.Red, &any) {
+		return false
+	}
+	if !Check(k.Green, c.Green, &any) {
+		return false
+	}
+	return any >= c.Any
+}
+
+func (k *Key) Total() int {
+	return k.Any + k.White + k.Blue + k.Black + k.Red + k.Green
+}
+
+func (g *Game) PutCreatures() {
+	dp := make(map[Key]bool)
+	dp[Key{}] = true
+	for _, cip := range g.BattleField {
+		if cip.Tapped || cip.Card.Type != Land {
+			continue
+		}
+		ndp := make(map[Key]bool)
+		for key := range dp {
+			ndp[key] = true
+			for _, mana := range cip.Card.Produce {
+				nkey := key
+				nkey.Add(mana)
+				ndp[nkey] = true
 			}
-			if len(lands) != len(c.Cost) {
+		}
+		dp = ndp
+	}
+	var maxTotal int
+	var maxTotalCreatures int
+	for i := 0; i < (1 << uint(len(g.Hand))); i++ {
+		ok := true
+		var cost Key
+		for j, c := range g.Hand {
+			if (i & (1 << uint(j))) == 0 {
 				continue
 			}
-			for l := range lands {
-				l.Tapped = true
+			if c.Type != Creature {
+				ok = false
+				break
 			}
+			for _, m := range c.Cost {
+				cost.Add(m)
+			}
+		}
+		if !ok {
+			continue
+		}
+		costTotal := cost.Total()
+		if costTotal < maxTotal {
+			continue
+		}
+		for k := range dp {
+			if k.Payable(&cost) {
+				maxTotal = costTotal
+				maxTotalCreatures = i
+				break
+			}
+		}
+	}
+	if maxTotalCreatures == 0 {
+		return
+	}
+	var newHand []*Card
+	for i, c := range g.Hand {
+		if (maxTotalCreatures & (1 << uint(i))) == 0 {
+			newHand = append(newHand, c)
+		} else {
 			g.BattleField = append(g.BattleField, &CardInPlay{
 				Tapped:            false,
 				SummoningSickness: true,
 				Card:              c,
 				Game:              g,
 			})
-			g.Hand = Take(g.Hand, i)
 			if g.Attacked && c == MarduHordechief {
 				g.BattleField = append(g.BattleField, &CardInPlay{
 					Tapped:            false,
@@ -363,10 +455,9 @@ func (g *Game) PutCreature() bool {
 					Game:              g,
 				})
 			}
-			return true
 		}
 	}
-	return false
+	g.Hand = newHand
 }
 
 func (g *Game) FirstMain() Status {
@@ -407,8 +498,7 @@ func (g *Game) SecondMain() Status {
 	}
 
 	// Put creatures.
-	for g.PutCreature() {
-	}
+	g.PutCreatures()
 	return Playing
 }
 
