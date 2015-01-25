@@ -408,7 +408,7 @@ func (k *Key) Total() int {
 	return k.Any + k.White + k.Blue + k.Black + k.Red + k.Green
 }
 
-func (g *Game) PutCreatures() {
+func (g *Game) PutCreatures() (cost int, creatures, used int64) {
 	dp := make(map[Key]bool)
 	dp[Key{}] = true
 	for i, cip := range g.BattleField {
@@ -428,9 +428,9 @@ func (g *Game) PutCreatures() {
 		dp = ndp
 	}
 	var maxTotal int
-	var maxTotalCreatures int
+	var maxTotalCreatures int64
 	var maxTotalKey Key
-	for i := 0; i < (1 << uint(len(g.Hand))); i++ {
+	for i := int64(0); i < (1 << uint(len(g.Hand))); i++ {
 		ok := true
 		var cost Key
 		for j, c := range g.Hand {
@@ -467,40 +467,9 @@ func (g *Game) PutCreatures() {
 		}
 	}
 	if maxTotalCreatures == 0 {
-		return
+		return 0, 0, 0
 	}
-	for i, c := range g.BattleField {
-		if (maxTotalKey.Used & (1 << uint(i))) == 0 {
-			continue
-		}
-		c.Tapped = true
-	}
-	var newHand []*Card
-	for i, c := range g.Hand {
-		if (maxTotalCreatures & (1 << uint(i))) == 0 {
-			newHand = append(newHand, c)
-		} else {
-			var Tapped bool
-			if c == TormentedHero || c == MarduSkullhunter {
-				Tapped = true
-			}
-			g.BattleField = append(g.BattleField, &CardInPlay{
-				Tapped:            Tapped,
-				SummoningSickness: true,
-				Card:              c,
-				Game:              g,
-			})
-			if g.Attacked && c == MarduHordechief {
-				g.BattleField = append(g.BattleField, &CardInPlay{
-					Tapped:            false,
-					SummoningSickness: true,
-					Card:              WorrierToken,
-					Game:              g,
-				})
-			}
-		}
-	}
-	g.Hand = newHand
+	return maxTotal, maxTotalCreatures, maxTotalKey.Used
 }
 
 func (g *Game) FirstMain() Status {
@@ -526,26 +495,98 @@ func (g *Game) Combat() Status {
 }
 
 func (g *Game) SecondMain() Status {
-	// Put a land.
+	mLand := -1
+	mCost := -1
+	var mCreatures, mUsed int64
+
+	obf := g.BattleField
+	oh := g.Hand
 	for i, c := range g.Hand {
-		if c.Type == Land {
+		if c.Type != Land {
+			continue
+		}
+
+		var Tapped bool
+		if c == ScouredBarrens {
+			Tapped = true
+		}
+
+		nbf := make([]*CardInPlay, len(obf))
+		copy(nbf, obf)
+		g.BattleField = append(nbf, &CardInPlay{
+			Tapped:            Tapped,
+			SummoningSickness: false,
+			Card:              c,
+			Game:              g,
+		})
+
+		nh := make([]*Card, len(oh))
+		copy(nh, oh)
+		g.Hand = Take(nh, i)
+
+		cost, creatures, used := g.PutCreatures()
+
+		g.BattleField = obf
+		g.Hand = oh
+
+		if mCost < cost {
+			mLand = i
+			mCost = cost
+			mCreatures = creatures
+			mUsed = used
+		}
+	}
+	g.BattleField = obf
+	g.Hand = oh
+
+	if mLand == -1 {
+		return Playing
+	}
+
+	var Tapped bool
+	if g.Hand[mLand] == ScouredBarrens {
+		Tapped = true
+	}
+	g.BattleField = append(g.BattleField, &CardInPlay{
+		Tapped:            Tapped,
+		SummoningSickness: false,
+		Card:              g.Hand[mLand],
+		Game:              g,
+	})
+	g.Hand = Take(g.Hand, mLand)
+
+	for i, c := range g.BattleField {
+		if (mUsed & (1 << uint(i))) != 0 {
+			c.Tapped = true
+		}
+	}
+	var newHand []*Card
+	for i, c := range g.Hand {
+		if (mCreatures & (1 << uint(i))) == 0 {
+			newHand = append(newHand, c)
+		} else {
 			var Tapped bool
-			if c == ScouredBarrens {
+			if c == TormentedHero || c == MarduSkullhunter {
 				Tapped = true
 			}
 			g.BattleField = append(g.BattleField, &CardInPlay{
 				Tapped:            Tapped,
-				SummoningSickness: false,
+				SummoningSickness: true,
 				Card:              c,
 				Game:              g,
 			})
-			g.Hand = Take(g.Hand, i)
-			break
+			if g.Attacked && c == MarduHordechief {
+				g.BattleField = append(g.BattleField, &CardInPlay{
+					Tapped:            false,
+					SummoningSickness: true,
+					Card:              WorrierToken,
+					Game:              g,
+				})
+			}
 		}
 	}
+	g.Hand = newHand
 
-	// Put creatures.
-	g.PutCreatures()
 	return Playing
 }
 
