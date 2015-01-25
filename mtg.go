@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"sort"
 )
 
 type Mana int
@@ -34,6 +35,7 @@ const (
 	Human CreatureType = iota
 	Worrier
 	Demon
+	Cat
 )
 
 type Card struct {
@@ -116,6 +118,15 @@ var SeekerOfTheWay = &Card{
 	CreatureType: []CreatureType{Human, Worrier},
 	Power:        2,
 	Toughness:    2,
+}
+
+var OreskosSwiftclaw = &Card{
+	Type:         Creature,
+	Name:         "OreskosSwiftclaw",
+	Cost:         []Mana{Any, White},
+	CreatureType: []CreatureType{Cat, Worrier},
+	Power:        3,
+	Toughness:    1,
 }
 
 var MarduHordechief = &Card{
@@ -610,9 +621,16 @@ func NewGame(deck *Deck) *Game {
 	}
 }
 
+type Ints []int
+
+func (is Ints) Len() int           { return len(is) }
+func (is Ints) Less(i, j int) bool { return is[i] < is[j] }
+func (is Ints) Swap(i, j int)      { is[i], is[j] = is[j], is[i] }
+
 func Stats(trial int) {
 	num := make(map[Status]int)
 	turns := make(map[Status]int)
+	var is Ints
 	winMax := 0
 	winMin := 1000
 	for i := 0; i < trial; i++ {
@@ -622,6 +640,7 @@ func Stats(trial int) {
 			if s != Playing {
 				num[s]++
 				turns[s] += g.Turn
+				is = append(is, g.Turn)
 				if s == Win {
 					if winMax < g.Turn {
 						winMax = g.Turn
@@ -634,8 +653,20 @@ func Stats(trial int) {
 			}
 		}
 	}
+	sort.Sort(is)
+
 	fmt.Printf("Win: %d, Lose: %d, Draw: %d\n", num[Win], num[Lose], num[Draw])
-	fmt.Printf("Avg: %f, Min: %d, Max: %d\n", float64(turns[Win])/float64(num[Win]), winMin, winMax)
+	fmt.Printf("Avg: %f, 50%%: %d, 75%%: %d, 90%%: %d, 95%%: %d, Min: %d, Max: %d\n",
+		float64(turns[Win])/float64(num[Win]), is[len(is)/2], is[len(is)*3/4],
+		is[len(is)*9/10], is[len(is)*19/20], winMin, winMax)
+
+	t := -1
+	for i, it := range is {
+		if t < it {
+			t = it
+			fmt.Printf("T%d: %.1f%%\n", t-1, float64(i)/10)
+		}
+	}
 }
 
 func main() {
