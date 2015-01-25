@@ -73,6 +73,15 @@ var BloodsoakedChampion = &Card{
 	Toughness:    1,
 }
 
+var TormentedHero = &Card{
+	Type:         Creature,
+	Name:         "Tormented Hero",
+	Cost:         []Mana{Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    1,
+}
+
 var ChiefOfTheEdge = &Card{
 	Type:         Creature,
 	Name:         "Chief of the Edge",
@@ -160,6 +169,10 @@ var MarduWorrier = &Deck{
 			Amount: 4,
 		},
 		{
+			Card:   TormentedHero,
+			Amount: 4,
+		},
+		{
 			Card:   ChiefOfTheEdge,
 			Amount: 4,
 		},
@@ -181,11 +194,11 @@ var MarduWorrier = &Deck{
 		},
 		{
 			Card:   Swamp,
-			Amount: 16,
+			Amount: 14,
 		},
 		{
 			Card:   Plains,
-			Amount: 16,
+			Amount: 14,
 		},
 		{
 			Card:   ScouredBarrens,
@@ -467,8 +480,12 @@ func (g *Game) PutCreatures() {
 		if (maxTotalCreatures & (1 << uint(i))) == 0 {
 			newHand = append(newHand, c)
 		} else {
+			var Tapped bool
+			if c == TormentedHero || c == MarduSkullhunter {
+				Tapped = true
+			}
 			g.BattleField = append(g.BattleField, &CardInPlay{
-				Tapped:            false,
+				Tapped:            Tapped,
 				SummoningSickness: true,
 				Card:              c,
 				Game:              g,
