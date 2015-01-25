@@ -122,9 +122,9 @@ func (c *CardInPlay) Power() int {
 }
 
 type Game struct {
-	OpponentLife int
-	Life         int
 	Turn         int
+	Life         int
+	OpponentLife int
 	First        bool
 	Hand         []*Card
 	Library      []*Card
@@ -132,9 +132,10 @@ type Game struct {
 }
 
 func (g *Game) Print() {
-	fmt.Printf("OpponentLife: %d\n", g.OpponentLife)
-	fmt.Printf("Life: %d\n", g.Life)
 	fmt.Printf("Turn: %d\n", g.Turn)
+	fmt.Printf("Life: %d\n", g.Life)
+	fmt.Printf("OpponentLife: %d\n", g.OpponentLife)
+	fmt.Printf("First: %t\n", g.First)
 	fmt.Printf("Hand (%d):\n", len(g.Hand))
 	for i, c := range g.Hand {
 		fmt.Printf("%d: %s\n", i, c.Name)
@@ -196,6 +197,13 @@ func (g *Game) Draw() Status {
 	return Playing
 }
 
+func Take(c []*Card, i int) []*Card {
+	if i == len(c) {
+		return c[0:i]
+	}
+	return append(c[0:i], c[i+1:]...)
+}
+
 func (g *Game) FirstMain() Status {
 	// Put a land.
 	for i, c := range g.Hand {
@@ -206,7 +214,7 @@ func (g *Game) FirstMain() Status {
 				Card:              c,
 				Game:              g,
 			})
-			g.Hand = append(g.Hand[0:i], g.Hand[i+1:]...)
+			g.Hand = Take(g.Hand, i)
 			break
 		}
 	}
@@ -235,7 +243,7 @@ func (g *Game) FirstMain() Status {
 					Card:              c,
 					Game:              g,
 				})
-				g.Hand = append(g.Hand[0:i], g.Hand[i+1:]...)
+				g.Hand = Take(g.Hand, i)
 			}
 		}
 	}
@@ -270,9 +278,9 @@ func NewGame(deck *Deck) *Game {
 	l := MakeLibrary(deck)
 	l.Shuffle()
 	return &Game{
-		OpponentLife: 20,
-		Life:         20,
 		Turn:         0,
+		Life:         20,
+		OpponentLife: 20,
 		First:        true,
 		Hand:         l[0:7],
 		Library:      l[7:],
@@ -280,14 +288,35 @@ func NewGame(deck *Deck) *Game {
 	}
 }
 
+func Stats(trial int) {
+	num := make(map[Status]int)
+	turns := make(map[Status]int)
+	for i := 0; i < trial; i++ {
+		g := NewGame(MarduWorrier)
+		for {
+			s := g.PlayOneTurn()
+			if s != Playing {
+				num[s]++
+				turns[s] += g.Turn
+				break
+			}
+		}
+	}
+	fmt.Printf("Win: %d, Lose: %d, Draw: %d\n", num[Win], num[Lose], num[Draw])
+	fmt.Printf("%f\n", float64(turns[Win])/float64(num[Win]))
+}
+
 func main() {
 	g := NewGame(MarduWorrier)
 	g.Print()
-	for i := 0; i < 10; i++ {
+	for {
 		s := g.PlayOneTurn()
+		fmt.Println()
 		g.Print()
 		if s != Playing {
 			break
 		}
 	}
+
+	Stats(1000)
 }
