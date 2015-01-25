@@ -27,30 +27,85 @@ const (
 	Land
 )
 
+type CreatureType int
+
+const (
+	Human CreatureType = iota
+	Worrier
+	Demon
+)
+
 type Card struct {
-	Type      Type
-	Name      string
-	Cost      []Mana
-	Produce   []Mana
-	Power     int
-	Toughness int
+	Type         Type
+	Name         string
+	Cost         []Mana
+	Produce      []Mana
+	CreatureType []CreatureType
+	Power        int
+	Toughness    int
 }
 
-func (c *Card) CanProduce(m Mana) bool {
-	for _, p := range c.Produce {
-		if p == m {
+func (c *Card) IsCreatureType(ct CreatureType) bool {
+	for _, cct := range c.CreatureType {
+		if cct == ct {
 			return true
 		}
 	}
 	return false
 }
 
+func (c *Card) CanProduce(m Mana) bool {
+	for _, p := range c.Produce {
+		if m == Any || p == m {
+			return true
+		}
+	}
+	return false
+}
+
+var BloodsoakedChampion = &Card{
+	Type:         Creature,
+	Name:         "Bloodsoaked Champion",
+	Cost:         []Mana{Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    1,
+}
+
 var ChiefOfTheEdge = &Card{
-	Type:      Creature,
-	Name:      "Chief of the Edge",
-	Cost:      []Mana{White, Black},
-	Power:     3,
-	Toughness: 2,
+	Type:         Creature,
+	Name:         "Chief of the Edge",
+	Cost:         []Mana{White, Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        3,
+	Toughness:    2,
+}
+
+var ChiefOfTheScale = &Card{
+	Type:         Creature,
+	Name:         "Chief of the Scale",
+	Cost:         []Mana{White, Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    3,
+}
+
+var MarduSkullhunter = &Card{
+	Type:         Creature,
+	Name:         "Mardu Skullhunter",
+	Cost:         []Mana{Any, Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    1,
+}
+
+var SeekerOfTheWay = &Card{
+	Type:         Creature,
+	Name:         "Seeker of the Way",
+	Cost:         []Mana{Any, White},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    2,
 }
 
 var Swamp = &Card{
@@ -77,16 +132,32 @@ type Cards struct {
 var MarduWorrier = &Deck{
 	Cards: []*Cards{
 		{
+			Card:   BloodsoakedChampion,
+			Amount: 4,
+		},
+		{
 			Card:   ChiefOfTheEdge,
 			Amount: 4,
 		},
 		{
+			Card:   ChiefOfTheScale,
+			Amount: 4,
+		},
+		{
+			Card:   MarduSkullhunter,
+			Amount: 4,
+		},
+		{
+			Card:   SeekerOfTheWay,
+			Amount: 4,
+		},
+		{
 			Card:   Swamp,
-			Amount: 28,
+			Amount: 20,
 		},
 		{
 			Card:   Plains,
-			Amount: 28,
+			Amount: 20,
 		},
 	},
 }
@@ -118,7 +189,23 @@ type CardInPlay struct {
 }
 
 func (c *CardInPlay) Power() int {
-	return c.Card.Power
+	var adjustment int
+	for _, bc := range c.Game.BattleField {
+		if bc.Card == ChiefOfTheEdge && bc != c && c.Card.IsCreatureType(Worrier) {
+			adjustment++
+		}
+	}
+	return c.Card.Power + adjustment
+}
+
+func (c *CardInPlay) Toughness() int {
+	var adjustment int
+	for _, bc := range c.Game.BattleField {
+		if bc.Card == ChiefOfTheScale && bc != c && c.Card.IsCreatureType(Worrier) {
+			adjustment++
+		}
+	}
+	return c.Card.Toughness + adjustment
 }
 
 type Game struct {
@@ -146,7 +233,17 @@ func (g *Game) Print() {
 	}
 	fmt.Printf("BattleField (%d):\n", len(g.BattleField))
 	for i, c := range g.BattleField {
-		fmt.Printf("%d: %s\n", i, c.Card.Name)
+		fmt.Printf("%d: %s", i, c.Card.Name)
+		if c.Card.Type == Creature {
+			fmt.Printf(" [%d/%d]", c.Power(), c.Toughness())
+		}
+		if c.Tapped {
+			fmt.Printf(" [T]")
+		}
+		if c.SummoningSickness {
+			fmt.Printf(" [S]")
+		}
+		fmt.Printf("\n")
 	}
 }
 
@@ -204,6 +301,42 @@ func Take(c []*Card, i int) []*Card {
 	return append(c[0:i], c[i+1:]...)
 }
 
+func (g *Game) PutCreature() bool {
+	for i, c := range g.Hand {
+		if c.Type == Creature {
+			lands := make(map[*CardInPlay]bool)
+			for _, m := range c.Cost {
+				var ok bool
+				for _, cip := range g.BattleField {
+					if !cip.Tapped && !lands[cip] && cip.Card.CanProduce(m) {
+						lands[cip] = true
+						ok = true
+						break
+					}
+				}
+				if !ok {
+					break
+				}
+			}
+			if len(lands) != len(c.Cost) {
+				continue
+			}
+			for l := range lands {
+				l.Tapped = true
+			}
+			g.BattleField = append(g.BattleField, &CardInPlay{
+				Tapped:            false,
+				SummoningSickness: true,
+				Card:              c,
+				Game:              g,
+			})
+			g.Hand = Take(g.Hand, i)
+			return true
+		}
+	}
+	return false
+}
+
 func (g *Game) FirstMain() Status {
 	// Put a land.
 	for i, c := range g.Hand {
@@ -219,39 +352,17 @@ func (g *Game) FirstMain() Status {
 		}
 	}
 
-	// Put a creature.
-	for i, c := range g.Hand {
-		if c.Type == Creature {
-			j := 0
-			var lands []*CardInPlay
-			for _, cip := range g.BattleField {
-				if j == len(c.Cost) {
-					break
-				}
-				if !cip.Tapped && cip.Card.CanProduce(c.Cost[j]) {
-					j++
-					lands = append(lands, cip)
-				}
-			}
-			if j == len(c.Cost) {
-				for _, l := range lands {
-					l.Tapped = true
-				}
-				g.BattleField = append(g.BattleField, &CardInPlay{
-					Tapped:            false,
-					SummoningSickness: true,
-					Card:              c,
-					Game:              g,
-				})
-				g.Hand = Take(g.Hand, i)
-			}
-		}
+	// Put creatures.
+	for g.PutCreature() {
 	}
 	return Playing
 }
 
 func (g *Game) Combat() Status {
 	for _, c := range g.BattleField {
+		if c.Card.Type != Creature {
+			continue
+		}
 		if c.Tapped || c.SummoningSickness {
 			continue
 		}
@@ -317,14 +428,16 @@ func Stats(trial int) {
 }
 
 func main() {
-	g := NewGame(MarduWorrier)
-	g.Print()
-	for {
-		s := g.PlayOneTurn()
-		fmt.Println()
+	for i := 0; i < 10; i++ {
+		g := NewGame(MarduWorrier)
 		g.Print()
-		if s != Playing {
-			break
+		for {
+			s := g.PlayOneTurn()
+			fmt.Println()
+			g.Print()
+			if s != Playing {
+				break
+			}
 		}
 	}
 
