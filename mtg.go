@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/rand"
 )
 
@@ -332,6 +333,7 @@ type Key struct {
 	Black int
 	Red   int
 	Green int
+	Used  int64
 }
 
 func (k *Key) Add(m Mana) {
@@ -386,7 +388,7 @@ func (k *Key) Total() int {
 func (g *Game) PutCreatures() {
 	dp := make(map[Key]bool)
 	dp[Key{}] = true
-	for _, cip := range g.BattleField {
+	for i, cip := range g.BattleField {
 		if cip.Tapped || cip.Card.Type != Land {
 			continue
 		}
@@ -396,6 +398,7 @@ func (g *Game) PutCreatures() {
 			for _, mana := range cip.Card.Produce {
 				nkey := key
 				nkey.Add(mana)
+				nkey.Used |= 1 << uint(i)
 				ndp[nkey] = true
 			}
 		}
@@ -403,6 +406,7 @@ func (g *Game) PutCreatures() {
 	}
 	var maxTotal int
 	var maxTotalCreatures int
+	var maxTotalKey Key
 	for i := 0; i < (1 << uint(len(g.Hand))); i++ {
 		ok := true
 		var cost Key
@@ -425,16 +429,28 @@ func (g *Game) PutCreatures() {
 		if costTotal < maxTotal {
 			continue
 		}
+		minPay := math.MaxInt32
+		var minPayKey Key
 		for k := range dp {
-			if k.Payable(&cost) {
-				maxTotal = costTotal
-				maxTotalCreatures = i
-				break
+			if k.Payable(&cost) && k.Total() < minPay {
+				minPay = k.Total()
+				minPayKey = k
 			}
+		}
+		if minPay < math.MaxInt32 {
+			maxTotal = costTotal
+			maxTotalCreatures = i
+			maxTotalKey = minPayKey
 		}
 	}
 	if maxTotalCreatures == 0 {
 		return
+	}
+	for i, c := range g.BattleField {
+		if (maxTotalKey.Used & (1 << uint(i))) == 0 {
+			continue
+		}
+		c.Tapped = true
 	}
 	var newHand []*Card
 	for i, c := range g.Hand {
