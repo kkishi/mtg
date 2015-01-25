@@ -138,6 +138,12 @@ var Plains = &Card{
 	Produce: []Mana{White},
 }
 
+var ScouredBarrens = &Card{
+	Type:    Land,
+	Name:    "Scoured Barrens",
+	Produce: []Mana{Black, White},
+}
+
 type Deck struct {
 	Cards []*Cards
 }
@@ -175,11 +181,15 @@ var MarduWorrier = &Deck{
 		},
 		{
 			Card:   Swamp,
-			Amount: 18,
+			Amount: 16,
 		},
 		{
 			Card:   Plains,
-			Amount: 18,
+			Amount: 16,
+		},
+		{
+			Card:   ScouredBarrens,
+			Amount: 4,
 		},
 	},
 }
@@ -502,8 +512,12 @@ func (g *Game) SecondMain() Status {
 	// Put a land.
 	for i, c := range g.Hand {
 		if c.Type == Land {
+			var Tapped bool
+			if c == ScouredBarrens {
+				Tapped = true
+			}
 			g.BattleField = append(g.BattleField, &CardInPlay{
-				Tapped:            false,
+				Tapped:            Tapped,
 				SummoningSickness: false,
 				Card:              c,
 				Game:              g,
