@@ -164,6 +164,12 @@ var ScouredBarrens = &Card{
 	Produce: []Mana{Black, White},
 }
 
+var CavesOfKoilos = &Card{
+	Type:    Land,
+	Name:    "Caves of Koilos",
+	Produce: []Mana{Black, White},
+}
+
 type Deck struct {
 	Cards []*Cards
 }
