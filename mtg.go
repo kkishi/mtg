@@ -693,6 +693,31 @@ func main() {
 	}
 
 	Stats(1000)
-	fmt.Println(model.Game{})
-	fmt.Println(card.Plains)
+
+	g := &model.Game{
+		Players: []*model.Player{
+			&model.Player{},
+		},
+	}
+
+	p := &model.Permanent{
+		Type:   model.Land,
+		Card:   card.Plains,
+		Tapped: false,
+	}
+
+	for _, aa := range p.Card.ActivatedAbilities {
+		cs := aa.Commands(&model.Context{
+			Game:      g,
+			Player:    g.Players[0],
+			Permanent: p,
+		})
+		for _, c := range cs {
+			fmt.Println(g.Players[0], p)
+			c.Execute()
+			fmt.Println(g.Players[0], p)
+			c.Undo()
+			fmt.Println(g.Players[0], p)
+		}
+	}
 }

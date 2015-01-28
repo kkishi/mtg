@@ -4,24 +4,17 @@ import (
 	"github.com/kkishi/mtg/model"
 )
 
-type Context struct {
-	Game      *model.Game
-	Player    *model.Player
-	Permanent *model.Permanent
-}
-
-type ActivatedAbility interface {
-	Commands(c *Context) []Command
-}
+// ManaAbility implements model.ActivatedAbility.
+var _ model.ActivatedAbility = (*ManaAbility)(nil)
 
 type ManaAbility struct {
 	Mana model.Mana
 }
 
-func (ma *ManaAbility) Commands(c *Context) []Command {
-	return []Command{
+func (ma *ManaAbility) Commands(c *model.Context) []model.Command {
+	return []model.Command{
 		&MultiCommand{
-			Commands: []Command{
+			Commands: []model.Command{
 				&TapCommand{
 					Permanent: c.Permanent,
 				},
@@ -34,13 +27,11 @@ func (ma *ManaAbility) Commands(c *Context) []Command {
 	}
 }
 
-type Command interface {
-	Execute()
-	Undo()
-}
+// MultiCommand implements model.Command.
+var _ model.Command = (*MultiCommand)(nil)
 
 type MultiCommand struct {
-	Commands []Command
+	Commands []model.Command
 }
 
 func (mc *MultiCommand) Execute() {
@@ -55,6 +46,9 @@ func (mc *MultiCommand) Undo() {
 	}
 }
 
+// TapCommand implements model.Command.
+var _ model.Command = (*TapCommand)(nil)
+
 type TapCommand struct {
 	Permanent *model.Permanent
 }
@@ -66,6 +60,9 @@ func (tc *TapCommand) Execute() {
 func (tc *TapCommand) Undo() {
 	tc.Permanent.Tapped = false
 }
+
+// AddManaCommand implements model.Command.
+var _ model.Command = (*AddManaCommand)(nil)
 
 type AddManaCommand struct {
 	Manas  []model.Mana

@@ -18,9 +18,9 @@ var Plains = &model.Card{
 	Name:     "Plains",
 	Type:     model.Land,
 	SubTypes: []model.Type{model.Plains},
-	ActivatedAbilities: []ability.ActivatedAbility{
+	ActivatedAbilities: []model.ActivatedAbility{
 		&ability.ManaAbility{
-			Mana: White,
+			Mana: model.White,
 		},
 	},
 }

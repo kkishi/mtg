@@ -1,9 +1,5 @@
 package model
 
-import (
-	"github.com/kkishi/mtg/ability"
-)
-
 type Part int
 
 const (
@@ -93,11 +89,26 @@ type Card struct {
 	Cost               []Mana
 	Power              int
 	Toughness          int
-	ActivatedAbilities []ability.ActivatedAbility
+	ActivatedAbilities []ActivatedAbility
 }
 
 type Permanent struct {
 	Type   Type
 	Card   *Card
 	Tapped bool
+}
+
+type Context struct {
+	Game      *Game
+	Player    *Player
+	Permanent *Permanent
+}
+
+type ActivatedAbility interface {
+	Commands(c *Context) []Command
+}
+
+type Command interface {
+	Execute()
+	Undo()
 }
