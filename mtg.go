@@ -5,6 +5,9 @@ import (
 	"math"
 	"math/rand"
 	"sort"
+
+	"github.com/kkishi/mtg/card"
+	"github.com/kkishi/mtg/model"
 )
 
 type Mana int
@@ -690,4 +693,6 @@ func main() {
 	}
 
 	Stats(1000)
+	fmt.Println(model.Game{})
+	fmt.Println(card.Plains)
 }
