@@ -141,6 +141,31 @@ var MarduHordechief = &Card{
 	Toughness:    3,
 }
 
+var ButcherOfTheHorde = &Card{
+	Type:         Creature,
+	Name:         "Butcher of the Horde",
+	Cost:         []Mana{Any, Red, White, Black},
+	CreatureType: []CreatureType{Demon},
+	Power:        5,
+	Toughness:    4,
+}
+
+var MarduCharm = &Card{
+	Type:      Instant,
+	Name:      "Mardu Charm",
+	Cost:      []Mana{Red, White, Black},
+	Power:     0,
+	Toughness: 0,
+}
+
+var RaidersSpoils = &Card{
+	Type:      Enchantment,
+	Name:      "Raider's Spoils",
+	Cost:      []Mana{Any, Any, Any, Black},
+	Power:     0,
+	Toughness: 0,
+}
+
 var WorrierToken = &Card{
 	Type:         Creature,
 	Name:         "Worrier Token",
@@ -149,16 +174,10 @@ var WorrierToken = &Card{
 	Toughness:    1,
 }
 
-var Swamp = &Card{
+var NomadOutpost = &Card{
 	Type:    Land,
-	Name:    "Swamp",
-	Produce: []Mana{Black},
-}
-
-var Plains = &Card{
-	Type:    Land,
-	Name:    "Plains",
-	Produce: []Mana{White},
+	Name:    "Nomad Outpost",
+	Produce: []Mana{Red, White, Black},
 }
 
 var ScouredBarrens = &Card{
@@ -171,6 +190,36 @@ var CavesOfKoilos = &Card{
 	Type:    Land,
 	Name:    "Caves of Koilos",
 	Produce: []Mana{Black, White},
+}
+
+var WindScarredCrag = &Card{
+	Type:    Land,
+	Name:    "Wind-Scarred Crag",
+	Produce: []Mana{Red, White},
+}
+
+var BattlefieldForge = &Card{
+	Type:    Land,
+	Name:    "Battlefield Forge",
+	Produce: []Mana{Red, White},
+}
+
+var BloodfellCaves = &Card{
+	Type:    Land,
+	Name:    "Bloodfell Caves",
+	Produce: []Mana{Black, Red},
+}
+
+var Swamp = &Card{
+	Type:    Land,
+	Name:    "Swamp",
+	Produce: []Mana{Black},
+}
+
+var Plains = &Card{
+	Type:    Land,
+	Name:    "Plains",
+	Produce: []Mana{White},
 }
 
 type Deck struct {
@@ -186,10 +235,6 @@ var MarduWorrier = &Deck{
 	Cards: []*Cards{
 		{
 			Card:   BloodsoakedChampion,
-			Amount: 4,
-		},
-		{
-			Card:   TormentedHero,
 			Amount: 4,
 		},
 		{
@@ -213,15 +258,39 @@ var MarduWorrier = &Deck{
 			Amount: 4,
 		},
 		{
-			Card:   Swamp,
-			Amount: 14,
+			Card:   ButcherOfTheHorde,
+			Amount: 4,
 		},
 		{
-			Card:   Plains,
-			Amount: 14,
+			Card:   MarduCharm,
+			Amount: 4,
+		},
+		{
+			Card:   RaidersSpoils,
+			Amount: 4,
+		},
+		{
+			Card:   NomadOutpost,
+			Amount: 4,
 		},
 		{
 			Card:   ScouredBarrens,
+			Amount: 4,
+		},
+		{
+			Card:   WindScarredCrag,
+			Amount: 4,
+		},
+		{
+			Card:   BloodfellCaves,
+			Amount: 4,
+		},
+		{
+			Card:   Plains,
+			Amount: 4,
+		},
+		{
+			Card:   Swamp,
 			Amount: 4,
 		},
 	},
@@ -257,6 +326,8 @@ func (c *CardInPlay) Power() int {
 	var adjustment int
 	for _, bc := range c.Game.BattleField {
 		if bc.Card == ChiefOfTheEdge && bc != c && c.Card.IsCreatureType(Worrier) {
+			adjustment++
+		} else if bc.Card == RaidersSpoils {
 			adjustment++
 		}
 	}
@@ -296,6 +367,10 @@ func (g *Game) Print() {
 	}
 	fmt.Printf("Library (%d):\n", len(g.Library))
 	for i, c := range g.Library {
+		if i == 10 {
+			fmt.Println("...")
+			break
+		}
 		fmt.Printf("%d: %s\n", i, c.Name)
 	}
 	fmt.Printf("BattleField (%d):\n", len(g.BattleField))
@@ -434,7 +509,7 @@ func (k *Key) Total() int {
 	return k.Any + k.White + k.Blue + k.Black + k.Red + k.Green
 }
 
-func (g *Game) PutCreatures() {
+func (g *Game) CastSpells() {
 	dp := make(map[Key]bool)
 	dp[Key{}] = true
 	for i, cip := range g.BattleField {
@@ -457,7 +532,7 @@ func (g *Game) PutCreatures() {
 		var cost Key
 		for j := 0; j <= i; j++ {
 			c := g.Hand[j]
-			if c.Type != Creature {
+			if c.Type != Creature && c.Type != Enchantment {
 				continue
 			}
 			for _, m := range c.Cost {
@@ -480,23 +555,30 @@ func (g *Game) PutCreatures() {
 			}
 			var newHand []*Card
 			for j, c := range g.Hand {
-				if j <= i && c.Type == Creature {
-					var Tapped bool
-					if c == TormentedHero || c == MarduSkullhunter {
-						Tapped = true
-					}
-					g.BattleField = append(g.BattleField, &CardInPlay{
-						Tapped:            Tapped,
-						SummoningSickness: true,
-						Card:              c,
-						Game:              g,
-					})
-					if g.Attacked && c == MarduHordechief {
+				if j <= i && (c.Type == Creature || c.Type == Enchantment) {
+					if c.Type == Creature {
+						var Tapped bool
+						if c == TormentedHero || c == MarduSkullhunter {
+							Tapped = true
+						}
 						g.BattleField = append(g.BattleField, &CardInPlay{
-							Tapped:            false,
+							Tapped:            Tapped,
 							SummoningSickness: true,
-							Card:              WorrierToken,
+							Card:              c,
 							Game:              g,
+						})
+						if g.Attacked && c == MarduHordechief {
+							g.BattleField = append(g.BattleField, &CardInPlay{
+								Tapped:            false,
+								SummoningSickness: true,
+								Card:              WorrierToken,
+								Game:              g,
+							})
+						}
+					} else if c.Type == Enchantment {
+						g.BattleField = append(g.BattleField, &CardInPlay{
+							Card: c,
+							Game: g,
 						})
 					}
 				} else {
@@ -596,7 +678,8 @@ func (g *Game) MainGreedy() Status {
 		}
 
 		var Tapped bool
-		if c == ScouredBarrens {
+		if c == NomadOutpost || c == ScouredBarrens || c == WindScarredCrag ||
+			c == BloodfellCaves {
 			Tapped = true
 		}
 
@@ -611,7 +694,7 @@ func (g *Game) MainGreedy() Status {
 	}
 
 	// Cast as much spells as possible.
-	g.PutCreatures()
+	g.CastSpells()
 
 	return Playing
 }
@@ -705,10 +788,11 @@ func main() {
 	for i := 0; i < 10; i++ {
 		g := NewGame(MarduWorrier)
 		g.Print()
+		fmt.Println()
 		for {
 			s := g.PlayOneTurn(false)
-			fmt.Println()
 			g.Print()
+			fmt.Println()
 			if s != Playing {
 				break
 			}
