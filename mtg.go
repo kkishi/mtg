@@ -278,20 +278,12 @@ var MarduWorrier = &Deck{
 			Amount: 4,
 		},
 		{
-			Card:   WindScarredCrag,
-			Amount: 4,
-		},
-		{
-			Card:   BloodfellCaves,
-			Amount: 4,
-		},
-		{
 			Card:   Plains,
-			Amount: 4,
+			Amount: 8,
 		},
 		{
 			Card:   Swamp,
-			Amount: 4,
+			Amount: 8,
 		},
 	},
 }
