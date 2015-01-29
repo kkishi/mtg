@@ -169,6 +169,15 @@ var MarduHordechief = &Card{
 	Toughness:    3,
 }
 
+var MarduStrikeLeader = &Card{
+	Type:         Creature,
+	Name:         "Mardu Strike Leader",
+	Cost:         []Mana{Any, Any, Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        3,
+	Toughness:    2,
+}
+
 var ButcherOfTheHorde = &Card{
 	Type:         Creature,
 	Name:         "Butcher of the Horde",
@@ -199,6 +208,14 @@ var WorrierToken = &Card{
 	Name:         "Worrier Token",
 	CreatureType: []CreatureType{Human, Worrier},
 	Power:        1,
+	Toughness:    1,
+}
+
+var WorrierToken2 = &Card{
+	Type:         Creature,
+	Name:         "Worrier Token",
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
 	Toughness:    1,
 }
 
@@ -267,7 +284,7 @@ var MarduWorrier = &Deck{
 		{BattleBrawler, 4},
 		{ChiefOfTheEdge, 4},
 		{ChiefOfTheScale, 4},
-		{MarduHordechief, 4},
+		{MarduStrikeLeader, 4},
 		{MarduCharm, 4},
 		{RaidersSpoils, 4},
 		{CavesOfKoilos, 4},
@@ -602,6 +619,15 @@ func (g *Game) Combat() Status {
 		c.Tapped = true
 		g.OpponentLife -= c.Power()
 		g.Attacked = true
+
+		if c.Card == MarduStrikeLeader {
+			g.BattleField = append(g.BattleField, &CardInPlay{
+				Tapped:            false,
+				SummoningSickness: true,
+				Card:              WorrierToken2,
+				Game:              g,
+			})
+		}
 	}
 	if g.OpponentLife <= 0 {
 		return Win
