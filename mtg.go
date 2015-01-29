@@ -274,7 +274,7 @@ var MarduWorrier = &Deck{
 			Amount: 4,
 		},
 		{
-			Card:   ScouredBarrens,
+			Card:   CavesOfKoilos,
 			Amount: 4,
 		},
 		{
