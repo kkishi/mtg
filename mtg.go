@@ -323,7 +323,7 @@ const (
 	Draw
 )
 
-func (g *Game) PlayOneTurn() Status {
+func (g *Game) PlayOneTurn(greedy bool) Status {
 	g.Turn++
 	g.Attacked = false
 	g.Untap()
@@ -336,8 +336,14 @@ func (g *Game) PlayOneTurn() Status {
 	if s := g.Combat(); s != Playing {
 		return s
 	}
-	if s := g.SecondMain(); s != Playing {
-		return s
+	if greedy {
+		if s := g.MainGreedy(); s != Playing {
+			return s
+		}
+	} else {
+		if s := g.SecondMain(); s != Playing {
+			return s
+		}
 	}
 	g.Discard()
 	return Playing
@@ -428,7 +434,7 @@ func (k *Key) Total() int {
 	return k.Any + k.White + k.Blue + k.Black + k.Red + k.Green
 }
 
-func (g *Game) PutCreatures() (cost int, creatures, used int64) {
+func (g *Game) PutCreatures() {
 	dp := make(map[Key]bool)
 	dp[Key{}] = true
 	for i, cip := range g.BattleField {
@@ -447,30 +453,16 @@ func (g *Game) PutCreatures() (cost int, creatures, used int64) {
 		}
 		dp = ndp
 	}
-	var maxTotal int
-	var maxTotalCreatures int64
-	var maxTotalKey Key
-	for i := int64(0); i < (1 << uint(len(g.Hand))); i++ {
-		ok := true
+	for i := len(g.Hand) - 1; i >= 0; i-- {
 		var cost Key
-		for j, c := range g.Hand {
-			if (i & (1 << uint(j))) == 0 {
-				continue
-			}
+		for j := 0; j <= i; j++ {
+			c := g.Hand[j]
 			if c.Type != Creature {
-				ok = false
-				break
+				continue
 			}
 			for _, m := range c.Cost {
 				cost.Add(m)
 			}
-		}
-		if !ok {
-			continue
-		}
-		costTotal := cost.Total()
-		if costTotal < maxTotal {
-			continue
 		}
 		minPay := math.MaxInt32
 		var minPayKey Key
@@ -481,15 +473,40 @@ func (g *Game) PutCreatures() (cost int, creatures, used int64) {
 			}
 		}
 		if minPay < math.MaxInt32 {
-			maxTotal = costTotal
-			maxTotalCreatures = i
-			maxTotalKey = minPayKey
+			for i, cip := range g.BattleField {
+				if (minPayKey.Used & (1 << uint(i))) != 0 {
+					cip.Tapped = true
+				}
+			}
+			var newHand []*Card
+			for j, c := range g.Hand {
+				if j <= i && c.Type == Creature {
+					var Tapped bool
+					if c == TormentedHero || c == MarduSkullhunter {
+						Tapped = true
+					}
+					g.BattleField = append(g.BattleField, &CardInPlay{
+						Tapped:            Tapped,
+						SummoningSickness: true,
+						Card:              c,
+						Game:              g,
+					})
+					if g.Attacked && c == MarduHordechief {
+						g.BattleField = append(g.BattleField, &CardInPlay{
+							Tapped:            false,
+							SummoningSickness: true,
+							Card:              WorrierToken,
+							Game:              g,
+						})
+					}
+				} else {
+					newHand = append(newHand, c)
+				}
+			}
+			g.Hand = newHand
+			break
 		}
 	}
-	if maxTotalCreatures == 0 {
-		return 0, 0, 0
-	}
-	return maxTotal, maxTotalCreatures, maxTotalKey.Used
 }
 
 func (g *Game) FirstMain() Status {
@@ -514,13 +531,65 @@ func (g *Game) Combat() Status {
 	return Playing
 }
 
-func (g *Game) SecondMain() Status {
-	mLand := -1
-	mCost := -1
-	var mCreatures, mUsed int64
+var bestTurn int
+var bestHand []*Card
 
-	obf := g.BattleField
-	oh := g.Hand
+func CopyCards(cs []*Card) []*Card {
+	var ret []*Card
+	for _, c := range cs {
+		ret = append(ret, c)
+	}
+	return ret
+}
+
+func CopyCardInPlay(cips []*CardInPlay) []*CardInPlay {
+	var ret []*CardInPlay
+	for _, cip := range cips {
+		var copied CardInPlay = *cip
+		ret = append(ret, &copied)
+	}
+	return ret
+}
+
+func (g *Game) Rec(depth int, used map[int]bool, perm []*Card, hand []*Card) {
+	if depth == len(hand) {
+		cg := &Game{
+			Turn:         g.Turn,
+			Attacked:     g.Attacked,
+			Life:         g.Life,
+			OpponentLife: g.Life,
+			First:        g.First,
+			Hand:         CopyCards(perm),
+			Library:      CopyCards(g.Library),
+			BattleField:  CopyCardInPlay(g.BattleField),
+		}
+
+		// g was about to start the second main phase. First we finish that turn.
+		cg.MainGreedy()
+		cg.Discard()
+
+		for i := 0; i < bestTurn; i++ {
+			if cg.PlayOneTurn(true) != Playing {
+				bestTurn = i
+				bestHand = CopyCards(perm)
+			}
+		}
+	} else {
+		for i, c := range hand {
+			if used[i] {
+				continue
+			}
+			used[i] = true
+			perm = append(perm, c)
+			g.Rec(depth+1, used, perm, hand)
+			perm = perm[0 : len(perm)-1]
+			used[i] = false
+		}
+	}
+}
+
+func (g *Game) MainGreedy() Status {
+	// Put a first land in hand.
 	for i, c := range g.Hand {
 		if c.Type != Land {
 			continue
@@ -531,83 +600,36 @@ func (g *Game) SecondMain() Status {
 			Tapped = true
 		}
 
-		nbf := make([]*CardInPlay, len(obf))
-		copy(nbf, obf)
-		g.BattleField = append(nbf, &CardInPlay{
+		g.BattleField = append(g.BattleField, &CardInPlay{
 			Tapped:            Tapped,
 			SummoningSickness: false,
 			Card:              c,
 			Game:              g,
 		})
-
-		nh := make([]*Card, len(oh))
-		copy(nh, oh)
-		g.Hand = Take(nh, i)
-
-		cost, creatures, used := g.PutCreatures()
-
-		g.BattleField = obf
-		g.Hand = oh
-
-		if mCost < cost {
-			mLand = i
-			mCost = cost
-			mCreatures = creatures
-			mUsed = used
-		}
-	}
-	g.BattleField = obf
-	g.Hand = oh
-
-	if mLand == -1 {
-		return Playing
+		g.Hand = Take(g.Hand, i)
+		break
 	}
 
-	var Tapped bool
-	if g.Hand[mLand] == ScouredBarrens {
-		Tapped = true
-	}
-	g.BattleField = append(g.BattleField, &CardInPlay{
-		Tapped:            Tapped,
-		SummoningSickness: false,
-		Card:              g.Hand[mLand],
-		Game:              g,
-	})
-	g.Hand = Take(g.Hand, mLand)
-
-	for i, c := range g.BattleField {
-		if (mUsed & (1 << uint(i))) != 0 {
-			c.Tapped = true
-		}
-	}
-	var newHand []*Card
-	for i, c := range g.Hand {
-		if (mCreatures & (1 << uint(i))) == 0 {
-			newHand = append(newHand, c)
-		} else {
-			var Tapped bool
-			if c == TormentedHero || c == MarduSkullhunter {
-				Tapped = true
-			}
-			g.BattleField = append(g.BattleField, &CardInPlay{
-				Tapped:            Tapped,
-				SummoningSickness: true,
-				Card:              c,
-				Game:              g,
-			})
-			if g.Attacked && c == MarduHordechief {
-				g.BattleField = append(g.BattleField, &CardInPlay{
-					Tapped:            false,
-					SummoningSickness: true,
-					Card:              WorrierToken,
-					Game:              g,
-				})
-			}
-		}
-	}
-	g.Hand = newHand
+	// Cast as much spells as possible.
+	g.PutCreatures()
 
 	return Playing
+}
+
+func (g *Game) SecondMain() Status {
+	bestTurn = math.MaxInt32
+	bestHand = nil
+	g.Rec(0, make(map[int]bool), nil, g.Hand)
+	// fmt.Printf("Best (%d): ", bestTurn)
+	// for i, c := range bestHand {
+	// 	if i > 0 {
+	// 		fmt.Printf(", ")
+	// 	}
+	// 	fmt.Printf("%s", c.Name)
+	// }
+	// fmt.Printf("\n")
+	g.Hand = bestHand
+	return g.MainGreedy()
 }
 
 func (g *Game) Discard() {
@@ -645,7 +667,7 @@ func Stats(trial int) {
 	for i := 0; i < trial; i++ {
 		g := NewGame(MarduWorrier)
 		for {
-			s := g.PlayOneTurn()
+			s := g.PlayOneTurn(false)
 			if s != Playing {
 				num[s]++
 				turns[s] += g.Turn
@@ -673,7 +695,7 @@ func Stats(trial int) {
 	for i, it := range is {
 		if t < it {
 			t = it
-			fmt.Printf("T%d: %.1f%%\n", t-1, float64(i)/10)
+			fmt.Printf("T%d: %.1f%%\n", t-1, float64(i)*100/float64(trial))
 		}
 	}
 }
@@ -683,7 +705,7 @@ func main() {
 		g := NewGame(MarduWorrier)
 		g.Print()
 		for {
-			s := g.PlayOneTurn()
+			s := g.PlayOneTurn(false)
 			fmt.Println()
 			g.Print()
 			if s != Playing {
@@ -692,7 +714,7 @@ func main() {
 		}
 	}
 
-	Stats(1000)
+	Stats(100)
 
 	g := &model.Game{
 		Players: []*model.Player{
