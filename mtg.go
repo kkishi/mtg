@@ -680,6 +680,7 @@ func Stats(trial int) {
 						winMin = g.Turn
 					}
 				}
+				fmt.Printf("Trial %d: %d turns\n", i, g.Turn)
 				break
 			}
 		}
