@@ -365,6 +365,7 @@ type Game struct {
 
 	// Convenient data for search.
 	BestTurn int
+	BestLife int
 	BestHand []*Card
 }
 
@@ -669,8 +670,9 @@ func (g *Game) Rec(depth int, used map[int]bool, perm []*Card, hand []*Card) {
 		cg.MainGreedy()
 		cg.Discard()
 
-		for i := 0; i < g.BestTurn; i++ {
-			if cg.PlayOneTurn(true) != Playing {
+		for i := 0; i <= g.BestTurn; i++ {
+			if cg.PlayOneTurn(true) != Playing && (i < g.BestTurn || g.OpponentLife < g.BestLife) {
+				g.BestLife = g.OpponentLife
 				g.BestTurn = i
 				g.BestHand = CopyCards(perm)
 			}
@@ -720,6 +722,7 @@ func (g *Game) MainGreedy() Status {
 
 func (g *Game) SecondMain() Status {
 	g.BestTurn = math.MaxInt32
+	g.BestLife = math.MaxInt32
 	g.BestHand = nil
 	g.Rec(0, make(map[int]bool), nil, g.Hand)
 	// fmt.Printf("Best (%d): ", bestTurn)
