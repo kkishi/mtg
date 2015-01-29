@@ -39,6 +39,7 @@ const (
 	Worrier
 	Demon
 	Cat
+	Orc
 )
 
 type Card struct {
@@ -87,6 +88,24 @@ var TormentedHero = &Card{
 	Toughness:    1,
 }
 
+var MarduShadowspear = &Card{
+	Type:         Creature,
+	Name:         "Mardu Shadowspear",
+	Cost:         []Mana{Black},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    1,
+}
+
+var MarduWoeReaper = &Card{
+	Type:         Creature,
+	Name:         "Mardu Woe-Reaper",
+	Cost:         []Mana{White},
+	CreatureType: []CreatureType{Human, Worrier},
+	Power:        2,
+	Toughness:    1,
+}
+
 var ChiefOfTheEdge = &Card{
 	Type:         Creature,
 	Name:         "Chief of the Edge",
@@ -130,6 +149,15 @@ var OreskosSwiftclaw = &Card{
 	CreatureType: []CreatureType{Cat, Worrier},
 	Power:        3,
 	Toughness:    1,
+}
+
+var BattleBrawler = &Card{
+	Type:         Creature,
+	Name:         "Battle Brawler",
+	Cost:         []Mana{Any, Black},
+	CreatureType: []CreatureType{Orc, Worrier},
+	Power:        2,
+	Toughness:    2,
 }
 
 var MarduHordechief = &Card{
@@ -233,58 +261,18 @@ type Cards struct {
 
 var MarduWorrier = &Deck{
 	Cards: []*Cards{
-		{
-			Card:   BloodsoakedChampion,
-			Amount: 4,
-		},
-		{
-			Card:   ChiefOfTheEdge,
-			Amount: 4,
-		},
-		{
-			Card:   ChiefOfTheScale,
-			Amount: 4,
-		},
-		{
-			Card:   MarduSkullhunter,
-			Amount: 4,
-		},
-		{
-			Card:   SeekerOfTheWay,
-			Amount: 4,
-		},
-		{
-			Card:   MarduHordechief,
-			Amount: 4,
-		},
-		{
-			Card:   ButcherOfTheHorde,
-			Amount: 4,
-		},
-		{
-			Card:   MarduCharm,
-			Amount: 4,
-		},
-		{
-			Card:   RaidersSpoils,
-			Amount: 4,
-		},
-		{
-			Card:   NomadOutpost,
-			Amount: 4,
-		},
-		{
-			Card:   CavesOfKoilos,
-			Amount: 4,
-		},
-		{
-			Card:   Plains,
-			Amount: 8,
-		},
-		{
-			Card:   Swamp,
-			Amount: 8,
-		},
+		{BloodsoakedChampion, 4},
+		{TormentedHero, 4},
+		{MarduShadowspear, 4},
+		{MarduWoeReaper, 4},
+		{BattleBrawler, 4},
+		{ChiefOfTheEdge, 4},
+		{MarduHordechief, 4},
+		{MarduCharm, 4},
+		{RaidersSpoils, 4},
+		{CavesOfKoilos, 4},
+		{Plains, 8},
+		{Swamp, 12},
 	},
 }
 
@@ -319,8 +307,20 @@ func (c *CardInPlay) Power() int {
 	for _, bc := range c.Game.BattleField {
 		if bc.Card == ChiefOfTheEdge && bc != c && c.Card.IsCreatureType(Worrier) {
 			adjustment++
-		} else if bc.Card == RaidersSpoils {
+		}
+		if bc.Card == RaidersSpoils {
 			adjustment++
+		}
+	}
+	if c.Card == BattleBrawler {
+	out:
+		for _, bc := range c.Game.BattleField {
+			for _, m := range bc.Card.Cost {
+				if m == White || m == Red {
+					adjustment++
+					break out
+				}
+			}
 		}
 	}
 	return c.Card.Power + adjustment
