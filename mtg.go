@@ -263,10 +263,10 @@ var MarduWorrier = &Deck{
 	Cards: []*Cards{
 		{BloodsoakedChampion, 4},
 		{TormentedHero, 4},
-		{MarduShadowspear, 4},
 		{MarduWoeReaper, 4},
 		{BattleBrawler, 4},
 		{ChiefOfTheEdge, 4},
+		{ChiefOfTheScale, 4},
 		{MarduHordechief, 4},
 		{MarduCharm, 4},
 		{RaidersSpoils, 4},
