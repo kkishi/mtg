@@ -345,6 +345,10 @@ type Game struct {
 	Hand         []*Card
 	Library      []*Card
 	BattleField  []*CardInPlay
+
+	// Convenient data for search.
+	BestTurn int
+	BestHand []*Card
 }
 
 func (g *Game) Print() {
@@ -605,9 +609,6 @@ func (g *Game) Combat() Status {
 	return Playing
 }
 
-var bestTurn int
-var bestHand []*Card
-
 func CopyCards(cs []*Card) []*Card {
 	var ret []*Card
 	for _, c := range cs {
@@ -642,10 +643,10 @@ func (g *Game) Rec(depth int, used map[int]bool, perm []*Card, hand []*Card) {
 		cg.MainGreedy()
 		cg.Discard()
 
-		for i := 0; i < bestTurn; i++ {
+		for i := 0; i < g.BestTurn; i++ {
 			if cg.PlayOneTurn(true) != Playing {
-				bestTurn = i
-				bestHand = CopyCards(perm)
+				g.BestTurn = i
+				g.BestHand = CopyCards(perm)
 			}
 		}
 	} else {
@@ -692,8 +693,8 @@ func (g *Game) MainGreedy() Status {
 }
 
 func (g *Game) SecondMain() Status {
-	bestTurn = math.MaxInt32
-	bestHand = nil
+	g.BestTurn = math.MaxInt32
+	g.BestHand = nil
 	g.Rec(0, make(map[int]bool), nil, g.Hand)
 	// fmt.Printf("Best (%d): ", bestTurn)
 	// for i, c := range bestHand {
@@ -703,7 +704,7 @@ func (g *Game) SecondMain() Status {
 	// 	fmt.Printf("%s", c.Name)
 	// }
 	// fmt.Printf("\n")
-	g.Hand = bestHand
+	g.Hand = g.BestHand
 	return g.MainGreedy()
 }
 
@@ -733,39 +734,35 @@ func (is Ints) Len() int           { return len(is) }
 func (is Ints) Less(i, j int) bool { return is[i] < is[j] }
 func (is Ints) Swap(i, j int)      { is[i], is[j] = is[j], is[i] }
 
-func Stats(trial int) {
-	num := make(map[Status]int)
-	turns := make(map[Status]int)
-	var is Ints
-	winMax := 0
-	winMin := 1000
-	for i := 0; i < trial; i++ {
-		g := NewGame(MarduWorrier)
-		for {
-			s := g.PlayOneTurn(false)
-			if s != Playing {
-				num[s]++
-				turns[s] += g.Turn
-				is = append(is, g.Turn)
-				if s == Win {
-					if winMax < g.Turn {
-						winMax = g.Turn
-					}
-					if winMin > g.Turn {
-						winMin = g.Turn
+func Stats(trial, parallelism int) {
+	turn := make(chan int)
+	for i := 0; i < parallelism; i++ {
+		go func() {
+			for i := 0; i < trial/parallelism; i++ {
+				g := NewGame(MarduWorrier)
+				for {
+					if g.PlayOneTurn(false) != Playing {
+						turn <- g.Turn
+						break
 					}
 				}
-				fmt.Printf("Trial %d: %d turns\n", i, g.Turn)
-				break
 			}
-		}
+		}()
+	}
+
+	var turns int
+	var is Ints
+	for i := 0; i < trial; i++ {
+		t := <-turn
+		turns += t
+		is = append(is, t)
+		fmt.Printf("Trial %d: %d turns\n", i, t)
 	}
 	sort.Sort(is)
 
-	fmt.Printf("Win: %d, Lose: %d, Draw: %d\n", num[Win], num[Lose], num[Draw])
-	fmt.Printf("Avg: %f, 50%%: %d, 75%%: %d, 90%%: %d, 95%%: %d, Min: %d, Max: %d\n",
-		float64(turns[Win])/float64(num[Win]), is[len(is)/2], is[len(is)*3/4],
-		is[len(is)*9/10], is[len(is)*19/20], winMin, winMax)
+	fmt.Printf("Avg: %f, 50%%: %d, 75%%: %d, 90%%: %d, 95%%: %d\n",
+		float64(turns)/float64(trial), is[len(is)/2], is[len(is)*3/4],
+		is[len(is)*9/10], is[len(is)*19/20])
 
 	t := -1
 	for i, it := range is {
@@ -791,7 +788,7 @@ func main() {
 		}
 	}
 
-	Stats(100)
+	Stats(100, 4)
 
 	g := &model.Game{
 		Players: []*model.Player{
