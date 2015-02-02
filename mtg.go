@@ -285,11 +285,11 @@ var MarduWorrier = &Deck{
 		{ChiefOfTheEdge, 4},
 		{ChiefOfTheScale, 4},
 		{MarduStrikeLeader, 4},
-		{MarduCharm, 4},
-		{RaidersSpoils, 4},
+		{MarduCharm, 8},
+		{RaidersSpoils, 2},
 		{CavesOfKoilos, 4},
 		{Plains, 8},
-		{Swamp, 12},
+		{Swamp, 10},
 	},
 }
 
@@ -763,7 +763,7 @@ func (is Ints) Len() int           { return len(is) }
 func (is Ints) Less(i, j int) bool { return is[i] < is[j] }
 func (is Ints) Swap(i, j int)      { is[i], is[j] = is[j], is[i] }
 
-func Stats(trial, parallelism int) {
+func Stats(trial, parallelism int) float64 {
 	turn := make(chan int)
 	for i := 0; i < parallelism; i++ {
 		go func() {
@@ -794,16 +794,21 @@ func Stats(trial, parallelism int) {
 		is[len(is)*9/10], is[len(is)*19/20])
 
 	t := -1
+	var turn5 float64
 	for i, it := range is {
 		if t < it {
 			t = it
 			fmt.Printf("T%d: %.1f%%\n", t-1, float64(i)*100/float64(trial))
+			if t-1 == 5 {
+				turn5 = float64(i) * 100 / float64(trial)
+			}
 		}
 	}
+	return turn5
 }
 
 func main() {
-	for i := 0; i < 10; i++ {
+	for i := 0; i < 0; i++ {
 		g := NewGame(MarduWorrier)
 		g.Print()
 		fmt.Println()
@@ -817,7 +822,21 @@ func main() {
 		}
 	}
 
-	Stats(100, 4)
+	var turn5 []float64
+	for i := 0; i < 5; i++ {
+		turn5 = append(turn5, Stats(100, 1))
+	}
+	var sum float64
+	for _, t5 := range turn5 {
+		sum += t5
+	}
+	avg := sum / float64(len(turn5))
+	var ndev float64
+	for _, t5 := range turn5 {
+		ndev += math.Pow(t5-avg, 2)
+	}
+	stddev := math.Pow(ndev/float64(len(turn5)), 0.5)
+	fmt.Printf("T5: avg = %f, stddev = %f\n", avg, stddev)
 
 	g := &model.Game{
 		Players: []*model.Player{
