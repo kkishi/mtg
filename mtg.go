@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand"
+	"runtime"
 	"sort"
 
 	"github.com/kkishi/mtg/card"
@@ -295,9 +296,9 @@ var MarduWorrier = &Deck{
 
 type Library []*Card
 
-func (l Library) Shuffle() {
+func (l Library) Shuffle(r *rand.Rand) {
 	for i := 0; i < len(l)-1; i++ {
-		j := rand.Intn(len(l)-i) + i
+		j := r.Intn(len(l)-i) + i
 		l[i], l[j] = l[j], l[i]
 	}
 }
@@ -743,9 +744,9 @@ func (g *Game) Discard() {
 	}
 }
 
-func NewGame(deck *Deck) *Game {
+func NewGame(deck *Deck, r *rand.Rand) *Game {
 	l := MakeLibrary(deck)
-	l.Shuffle()
+	l.Shuffle(r)
 	return &Game{
 		Turn:         0,
 		Life:         20,
@@ -763,20 +764,22 @@ func (is Ints) Len() int           { return len(is) }
 func (is Ints) Less(i, j int) bool { return is[i] < is[j] }
 func (is Ints) Swap(i, j int)      { is[i], is[j] = is[j], is[i] }
 
-func Stats(trial, parallelism int) float64 {
+var seed int64
+
+func Stats(trial int) float64 {
 	turn := make(chan int)
-	for i := 0; i < parallelism; i++ {
-		go func() {
-			for i := 0; i < trial/parallelism; i++ {
-				g := NewGame(MarduWorrier)
-				for {
-					if g.PlayOneTurn(false) != Playing {
-						turn <- g.Turn
-						break
-					}
+
+	for i := 0; i < trial; i++ {
+		go func(r *rand.Rand) {
+			g := NewGame(MarduWorrier, r)
+			for {
+				if g.PlayOneTurn(false) != Playing {
+					turn <- g.Turn
+					break
 				}
 			}
-		}()
+		}(rand.New(rand.NewSource(seed)))
+		seed++
 	}
 
 	var turns int
@@ -808,8 +811,10 @@ func Stats(trial, parallelism int) float64 {
 }
 
 func main() {
+	var seed int64
 	for i := 0; i < 0; i++ {
-		g := NewGame(MarduWorrier)
+		g := NewGame(MarduWorrier, rand.New(rand.NewSource(seed)))
+		seed++
 		g.Print()
 		fmt.Println()
 		for {
@@ -822,9 +827,11 @@ func main() {
 		}
 	}
 
+	runtime.GOMAXPROCS(8)
+
 	var turn5 []float64
 	for i := 0; i < 5; i++ {
-		turn5 = append(turn5, Stats(100, 1))
+		turn5 = append(turn5, Stats(100))
 	}
 	var sum float64
 	for _, t5 := range turn5 {
